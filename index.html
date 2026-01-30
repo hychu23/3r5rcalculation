@@ -1,154 +1,227 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-HK">
 <head>
-    <meta charset="UTF-8">
-    <title>3R5R 計算工具</title>
-    <style>
-        table { border-collapse: collapse; font-family: Arial, sans-serif; }
-        td { border: 1px solid #ccc; padding: 10px; }
-        input { width: 200px; padding: 5px; }
-        .status-ok { 
-            background-color: #d4edda; 
-            color: #155724; 
-            font-weight: bold; 
-        }
-        .status-no { 
-            background-color: #f8d7da; 
-            color: #721c24; 
-            font-weight: bold; 
-        }
-        .status-warning {
-            background-color: #fff3cd;
-            color: #856404;
-            font-weight: bold;
-        }
-    </style>
-    <script>
-        function calculate() {
-            let b = new Array(29).fill(0);
-            
-            // 讀取輸入
-            b[1] = parseFloat(document.getElementById('b1').value) || 0;
-            b[2] = parseFloat(document.getElementById('b2').value) || 0;
-            b[3] = parseFloat(document.getElementById('b3').value) || 0;
-            b[4] = parseFloat(document.getElementById('b4').value) || 0;
-            b[5] = parseFloat(document.getElementById('b5').value) || 0;
-            b[10] = parseFloat(document.getElementById('b10').value) || 0;
-            b[12] = parseFloat(document.getElementById('b12').value) || 0;
-            b[23] = parseFloat(document.getElementById('b23').value) || 0;
-            
-            // EP & Next EP (找出最大價差對應的 EP)
-            let diffs = [
-                Math.abs(b[1] - b[2]),
-                Math.abs(b[2] - b[3]),
-                Math.abs(b[3] - b[4]),
-                Math.abs(b[4] - b[5])
-            ];
-            let maxDiff = Math.max(...diffs);
-            let matchIndex = diffs.indexOf(maxDiff) + 1;
-            b[7] = [b[1], b[2], b[3], b[4]][matchIndex - 1] || 0;
-            b[8] = [b[2], b[3], b[4], b[5]][matchIndex - 1] || 0;
-            
-            // CL Range 計算與顏色
-            let upper = Math.max((b[7] + b[8]) / 2 + 0.01, b[12] + 0.01);
-            let lower = Math.max(b[7], b[8]) - b[12] - 0.01;
-            let clRange;
-            let rangeCell = document.getElementById('b9');
-            
-            if (lower > upper) {
-                clRange = lower.toFixed(2) + " - " + upper.toFixed(2);
-                rangeCell.className = "";  // 正常顏色
-            } else {
-                clRange = "No feasible range";
-                rangeCell.className = "status-no";  // 紅色警示
-            }
-            rangeCell.innerText = clRange;
-            
-            // L = EP - CL
-            b[11] = b[7] - b[10];
-            
-            // 3R & 5R
-            b[14] = b[11] * 3;
-            b[15] = b[14] + b[7];
-            b[16] = b[11] * 5;
-            b[17] = b[7] + b[16];
-            
-            // 條件檢查 + 顏色
-            let lAtr = (b[11] > b[12]) ? "OK" : "NO";
-            let lClNext = (b[11] < (b[10] - b[8])) ? "OK" : "NO";
-            
-            let b19Cell = document.getElementById('b19');
-            let b20Cell = document.getElementById('b20');
-            
-            b19Cell.innerText = lAtr;
-            b19Cell.className = (lAtr === "OK") ? "status-ok" : "status-no";
-            
-            b20Cell.innerText = lClNext;
-            b20Cell.className = (lClNext === "OK") ? "status-ok" : "status-no";
-            
-            // 風險管理部分
-            b[24] = b[23] * 0.01;                    // 每注最多可輸 (1% 規則)
-            b[25] = b[11];                           // 最大虧損(L)
-            b[26] = b[7];                            // 買入價
-            
-            b[27] = (b[25] !== 0 && !isNaN(b[25])) ? b[24] / Math.abs(b[25]) : "#DIV/0!";
-            b[28] = (typeof b[27] === 'number' && !isNaN(b[27])) ? b[27] * b[26] : "#DIV/0!";
-            
-            // 更新數字顯示 (保留2位小數)
-            const numericRows = [7,8,11,14,15,16,17,24,25,26,27,28];
-            numericRows.forEach(r => {
-                let val = b[r];
-                let cell = document.getElementById('b' + r);
-                cell.innerText = (typeof val === 'number' && !isNaN(val)) 
-                    ? val.toFixed(2) 
-                    : val;
-            });
-        }
-        
-        window.onload = calculate;
-    </script>
+    <meta charset="UTF-8">
+    <title>Risk & Reward 計算工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+        .container { display: flex; gap: 40px; max-width: 1200px; margin: 0 auto; }
+        .main-table { flex: 1; }
+        .summary-box { 
+            flex: 0 0 320px; 
+            background: #fff; 
+            border: 2px solid #4CAF50; 
+            border-radius: 8px; 
+            padding: 20px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+        }
+        .summary-box h3 { margin: 0 0 15px 0; color: #2e7d32; text-align: center; }
+        .copy-btn { 
+            display: block; 
+            width: 100%; 
+            padding: 10px; 
+            margin-bottom: 15px; 
+            background: #2196F3; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            font-size: 1em; 
+            cursor: pointer; 
+            transition: background 0.2s; 
+        }
+        .copy-btn:hover { background: #1976d2; }
+        .copy-btn:active { background: #1565c0; }
+        .summary-item { 
+            margin: 10px 0; 
+            font-size: 1.1em; 
+            display: flex; 
+            justify-content: space-between; 
+        }
+        .summary-label { font-weight: bold; color: #333; }
+        .summary-value { color: #1976d2; font-weight: bold; }
+        table { border-collapse: collapse; width: 100%; }
+        td { border: 1px solid #ccc; padding: 10px; }
+        input { width: 200px; padding: 5px; box-sizing: border-box; }
+        .status-ok { 
+            background-color: #d4edda; 
+            color: #155724; 
+            font-weight: bold; 
+        }
+        .status-no { 
+            background-color: #f8d7da; 
+            color: #721c24; 
+            font-weight: bold; 
+        }
+    </style>
+    <script>
+        function calculate() {
+            let b = new Array(29).fill(0);
+            
+            b[1] = parseFloat(document.getElementById('b1').value) || 0;
+            b[2] = parseFloat(document.getElementById('b2').value) || 0;
+            b[3] = parseFloat(document.getElementById('b3').value) || 0;
+            b[4] = parseFloat(document.getElementById('b4').value) || 0;
+            b[5] = parseFloat(document.getElementById('b5').value) || 0;
+            b[10] = parseFloat(document.getElementById('b10').value) || 0;
+            b[12] = parseFloat(document.getElementById('b12').value) || 0;
+            b[23] = parseFloat(document.getElementById('b23').value) || 0;
+            
+            let diffs = [
+                Math.abs(b[1] - b[2]),
+                Math.abs(b[2] - b[3]),
+                Math.abs(b[3] - b[4]),
+                Math.abs(b[4] - b[5])
+            ];
+            let maxDiff = Math.max(...diffs);
+            let matchIndex = diffs.indexOf(maxDiff) + 1;
+            b[7] = [b[1], b[2], b[3], b[4]][matchIndex - 1] || 0;
+            b[8] = [b[2], b[3], b[4], b[5]][matchIndex - 1] || 0;
+            
+            let upper = Math.max((b[7] + b[8]) / 2 + 0.01, b[12] + 0.01);
+            let lower = Math.max(b[7], b[8]) - b[12] - 0.01;
+            let clRange = (lower > upper) 
+                ? lower.toFixed(2) + " - " + upper.toFixed(2) 
+                : "No feasible range";
+            let rangeCell = document.getElementById('b9');
+            rangeCell.innerText = clRange;
+            rangeCell.className = (lower > upper) ? "" : "status-no";
+            
+            b[11] = b[7] - b[10];
+            b[14] = b[11] * 3;
+            b[15] = b[14] + b[7];
+            b[16] = b[11] * 5;
+            b[17] = b[7] + b[16];
+            
+            let lAtr = (b[11] > b[12]) ? "OK" : "NO";
+            let lClNext = (b[11] < (b[10] - b[8])) ? "OK" : "NO";
+            
+            document.getElementById('b19').innerText = lAtr;
+            document.getElementById('b19').className = (lAtr === "OK") ? "status-ok" : "status-no";
+            
+            document.getElementById('b20').innerText = lClNext;
+            document.getElementById('b20').className = (lClNext === "OK") ? "status-ok" : "status-no";
+            
+            b[24] = b[23] * 0.01;
+            b[25] = b[11];
+            b[26] = b[7];
+            b[27] = (b[25] !== 0 && !isNaN(b[25])) ? b[24] / Math.abs(b[25]) : "#DIV/0!";
+            b[28] = (typeof b[27] === 'number' && !isNaN(b[27])) ? b[27] * b[26] : "#DIV/0!";
+            
+            const numericRows = [7,8,11,14,15,16,17,24,25,26,27,28];
+            numericRows.forEach(r => {
+                let val = b[r];
+                let cell = document.getElementById('b' + r);
+                cell.innerText = (typeof val === 'number' && !isNaN(val)) 
+                    ? val.toFixed(2) 
+                    : val;
+            });
+            
+            // 更新摘要
+            document.getElementById('summary-ep').innerText = b[7].toFixed(2);
+            document.getElementById('summary-cl').innerText = b[10].toFixed(2);
+            document.getElementById('summary-3r').innerText = b[15].toFixed(2);
+            document.getElementById('summary-5r').innerText = b[17].toFixed(2);
+            document.getElementById('summary-shares').innerText = (typeof b[27] === 'number' && !isNaN(b[27])) 
+                ? Math.floor(b[27]).toLocaleString() 
+                : b[27];
+        }
+
+        function copySummary() {
+            const ep = document.getElementById('summary-ep').innerText;
+            const cl = document.getElementById('summary-cl').innerText;
+            const r3 = document.getElementById('summary-3r').innerText;
+            const r5 = document.getElementById('summary-5r').innerText;
+            const shares = document.getElementById('summary-shares').innerText;
+
+            const text = `EP: ${ep}\nCL: ${cl}\n3R Price: ${r3}\n5R Price: ${r5}\n可買入最大股數: ${shares}`;
+
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const originalText = btn.innerText;
+                btn.innerText = "已複製！";
+                btn.style.background = "#4CAF50";
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.style.background = "#2196F3";
+                }, 2000);
+            }).catch(err => {
+                console.error('複製失敗:', err);
+                alert('複製失敗，請手動選取內容複製');
+            });
+        }
+        
+        window.onload = calculate;
+    </script>
 </head>
 <body>
-    <h2>3R 5R 計算工具</h2>
-    <table>
-        <tr><td>EP1</td><td><input id="b1" oninput="calculate()"></td></tr>
-        <tr><td>EP2</td><td><input id="b2" oninput="calculate()"></td></tr>
-        <tr><td>EP3</td><td><input id="b3" oninput="calculate()"></td></tr>
-        <tr><td>EP4</td><td><input id="b4" oninput="calculate()"></td></tr>
-        <tr><td>EP5</td><td><input id="b5" oninput="calculate()"></td></tr>
-        <tr><td></td><td></td></tr>
-        <tr><td>EP</td><td id="b7"></td></tr>
-        <tr><td>Next EP</td><td id="b8"></td></tr>
-        <tr><td>CL Range</td><td id="b9"></td></tr>
-        <tr><td>CL</td><td><input id="b10" oninput="calculate()"></td></tr>
-        <tr><td>L</td><td id="b11"></td></tr>
-        <tr><td>ATR</td><td><input id="b12" oninput="calculate()"></td></tr>
-        <tr><td></td><td></td></tr>
-        <tr><td>3R</td><td id="b14"></td></tr>
-        <tr><td>3R Price</td><td id="b15"></td></tr>
-        <tr><td>5R</td><td id="b16"></td></tr>
-        <tr><td>5R Price</td><td id="b17"></td></tr>
-        <tr><td></td><td></td></tr>
-        <tr><td>L > ATR</td><td id="b19"></td></tr>
-        <tr><td>L < CL - Next EP</td><td id="b20"></td></tr>
-        <tr><td></td><td></td></tr>
-        <tr><td></td><td></td></tr>
-        <tr><td>投資資金為</td><td><input id="b23" oninput="calculate()"></td></tr>
-        <tr><td>每注需要Lost少於 (1%)</td><td id="b24"></td></tr>
-        <tr><td>最大虧損(L)為</td><td id="b25"></td></tr>
-        <tr><td>買入價為</td><td id="b26"></td></tr>
-        <tr><td>可買入最大股數為</td><td id="b27"></td></tr>
-        <tr><td>最多資金為</td><td id="b28"></td></tr>
-    </table>
+    <h2>Risk & Reward 計算工具</h2>
+    
+    <div class="container">
+        <div class="main-table">
+            <table>
+                <tr><td>EP1</td><td><input id="b1" oninput="calculate()"></td></tr>
+                <tr><td>EP2</td><td><input id="b2" oninput="calculate()"></td></tr>
+                <tr><td>EP3</td><td><input id="b3" oninput="calculate()"></td></tr>
+                <tr><td>EP4</td><td><input id="b4" oninput="calculate()"></td></tr>
+                <tr><td>EP5</td><td><input id="b5" oninput="calculate()"></td></tr>
+                <tr><td></td><td></td></tr>
+                <tr><td>EP</td><td id="b7"></td></tr>
+                <tr><td>Next EP</td><td id="b8"></td></tr>
+                <tr><td>CL Range</td><td id="b9"></td></tr>
+                <tr><td>CL</td><td><input id="b10" oninput="calculate()"></td></tr>
+                <tr><td>L</td><td id="b11"></td></tr>
+                <tr><td>ATR</td><td><input id="b12" oninput="calculate()"></td></tr>
+                <tr><td></td><td></td></tr>
+                <tr><td>3R</td><td id="b14"></td></tr>
+                <tr><td>3R Price</td><td id="b15"></td></tr>
+                <tr><td>5R</td><td id="b16"></td></tr>
+                <tr><td>5R Price</td><td id="b17"></td></tr>
+                <tr><td></td><td></td></tr>
+                <tr><td>L > ATR</td><td id="b19"></td></tr>
+                <tr><td>L < CL - Next EP</td><td id="b20"></td></tr>
+                <tr><td></td><td></td></tr>
+                <tr><td></td><td></td></tr>
+                <tr><td>投資資金為</td><td><input id="b23" oninput="calculate()"></td></tr>
+                <tr><td>每注需要Lost少於 (1%)</td><td id="b24"></td></tr>
+                <tr><td>最大虧損(L)為</td><td id="b25"></td></tr>
+                <tr><td>買入價為</td><td id="b26"></td></tr>
+                <tr><td>可買入最大股數為</td><td id="b27"></td></tr>
+                <tr><td>最多資金為</td><td id="b28"></td></tr>
+            </table>
+        </div>
+        
+        <div class="summary-box">
+            <h3>結果摘要</h3>
+            <button id="copyBtn" class="copy-btn" onclick="copySummary()">一鍵複製結果</button>
+            <div class="summary-item">
+                <span class="summary-label">EP：</span>
+                <span class="summary-value" id="summary-ep">0.00</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">CL：</span>
+                <span class="summary-value" id="summary-cl">0.00</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">3R Price：</span>
+                <span class="summary-value" id="summary-3r">0.00</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">5R Price：</span>
+                <span class="summary-value" id="summary-5r">0.00</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">可買入最大股數：</span>
+                <span class="summary-value" id="summary-shares">0</span>
+            </div>
+            <p style="font-size:0.85em; color:#666; margin-top:15px; text-align:center;">
+                點擊上方按鈕即可複製到剪貼簿
+            </p>
+        </div>
+    </div>
 
-    <p style="margin-top:20px;">
-        <strong>顏色說明：</strong><br>
-        <span style="color:#155724; font-weight:bold;">綠色</span> = OK / 可行<br>
-        <span style="color:#721c24; font-weight:bold;">紅色</span> = NO / No feasible range<br>
-        輸入 EP1~5、CL、ATR 同投資資金後會即時自動計算。
-    </p>
-
+    <p style="margin-top:30px; color:#555;">
+        <strong>顏色說明：</strong> 綠色 = OK / 可行　　紅色 = NO / 無可行範圍
+    </p>
 </body>
-
 </html>
 
